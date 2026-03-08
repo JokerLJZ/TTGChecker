@@ -1,0 +1,39 @@
+{
+  "browser": {
+    "profile_path": "/home/your-user/.mozilla/firefox/xxxxxxxx.default-release",
+    "headless": false,
+    "slow_mo_ms": 0,
+    "action_delay_seconds": [1, 3],
+    "navigation_timeout_ms": 45000,
+    "screenshot_dir": "artifacts/screenshots",
+    "user_agent": null
+  },
+  "ttg": {
+    "base_url": "https://totheglory.im",
+    "checkin_url": "https://totheglory.im",
+    "button_selectors": [
+      "text=签到",
+      "text=簽到",
+      "text=Check In",
+      "a[href*='attendance']",
+      "a[href*='checkin']",
+      "button:has-text('签到')",
+      "button:has-text('Check In')"
+    ],
+    "success_keywords": ["签到成功", "magic", "魔力", "已签到", "获得"],
+    "logged_out_keywords": ["login", "登录", "sign in", "用户名", "密码"],
+    "success_message_selectors": [".alert", ".message", ".notice", ".success", "#info_block", "body"]
+  },
+  "retry": {
+    "max_attempts": 2,
+    "retry_interval_seconds": 10
+  },
+  "log": {
+    "state_file": "data/checkin_log.json"
+  },
+  "wxpusher": {
+    "app_token": "AT_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "uid": "UID_xxxxxxxxxxxxx",
+    "topic_ids": []
+  }
+}
