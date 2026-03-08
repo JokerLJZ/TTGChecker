@@ -32,12 +32,18 @@ class TtgBrowserClient:
         screenshot_dir.mkdir(parents=True, exist_ok=True)
 
         with sync_playwright() as playwright:
-            context = playwright.firefox.launch_persistent_context(
-                user_data_dir=self.browser_config.profile_path,
-                headless=self.browser_config.headless,
-                slow_mo=self.browser_config.slow_mo_ms,
-                user_agent=self.browser_config.user_agent,
-            )
+            launch_kwargs = {
+                "user_data_dir": self.browser_config.user_data_dir,
+                "headless": self.browser_config.headless,
+                "slow_mo": self.browser_config.slow_mo_ms,
+                "user_agent": self.browser_config.user_agent,
+            }
+            if self.browser_config.channel:
+                launch_kwargs["channel"] = self.browser_config.channel
+            if self.browser_config.executable_path:
+                launch_kwargs["executable_path"] = self.browser_config.executable_path
+
+            context = playwright.chromium.launch_persistent_context(**launch_kwargs)
             try:
                 context.set_default_navigation_timeout(self.browser_config.navigation_timeout_ms)
                 page = self._open_target_page(context)
@@ -82,7 +88,7 @@ class TtgBrowserClient:
     def _guard_logged_in(self, page: Page) -> None:
         body_text = page.locator("body").inner_text(timeout=10_000).lower()
         if any(keyword.lower() in body_text for keyword in self.ttg_config.logged_out_keywords):
-            raise CheckinError("Firefox profile is not logged in to TTG")
+            raise CheckinError("Chrome user data directory is not logged in to TTG")
 
     def _locate_checkin_button(self, page: Page):
         for selector in self.ttg_config.button_selectors:

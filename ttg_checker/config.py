@@ -8,7 +8,9 @@ from typing import Any
 
 @dataclass(slots=True)
 class BrowserConfig:
-    profile_path: str
+    user_data_dir: str
+    channel: str = "chrome"
+    executable_path: str | None = None
     headless: bool = False
     slow_mo_ms: int = 0
     action_delay_seconds: tuple[float, float] = (1.0, 3.0)
@@ -93,16 +95,18 @@ def load_config(config_path: str | Path) -> AppConfig:
 
 
 def _build_browser_config(data: dict[str, Any]) -> BrowserConfig:
-    profile_path = str(data.get("profile_path", "")).strip()
-    if not profile_path:
-        raise ValueError("browser.profile_path is required")
+    user_data_dir = str(data.get("user_data_dir", "")).strip()
+    if not user_data_dir:
+        raise ValueError("browser.user_data_dir is required")
 
     delay = data.get("action_delay_seconds", [1.0, 3.0])
     if not isinstance(delay, list) or len(delay) != 2:
         raise ValueError("browser.action_delay_seconds must be a list with two numbers")
 
     return BrowserConfig(
-        profile_path=profile_path,
+        user_data_dir=user_data_dir,
+        channel=str(data.get("channel", "chrome")),
+        executable_path=data.get("executable_path"),
         headless=bool(data.get("headless", False)),
         slow_mo_ms=int(data.get("slow_mo_ms", 0)),
         action_delay_seconds=(float(delay[0]), float(delay[1])),

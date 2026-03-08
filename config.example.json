@@ -1,6 +1,8 @@
 {
   "browser": {
-    "profile_path": "/home/your-user/.mozilla/firefox/xxxxxxxx.default-release",
+    "user_data_dir": "/home/your-user/.config/google-chrome",
+    "channel": "chrome",
+    "executable_path": null,
     "headless": false,
     "slow_mo_ms": 0,
     "action_delay_seconds": [1, 3],

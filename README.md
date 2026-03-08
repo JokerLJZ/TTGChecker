@@ -1,11 +1,11 @@
 # TTGChecker
 
-基于 Python + Playwright + Firefox Profile 的 TTG 自动签到脚本。
+基于 Python + Playwright + Chrome 用户数据目录的 TTG 自动签到脚本。
 
 ## 功能
 
-- 使用 Firefox 持久化 Profile 复用登录态，避免重复登录
-- 启动后直接新建标签页访问 TTG，不关闭 Firefox 默认首标签页
+- 使用 Chrome 持久化用户数据目录复用登录态，避免重复登录
+- 脚本自动启动 Chrome，新建标签页访问 TTG，完成后主动关闭 Chrome
 - 使用真实页面元素定位与点击完成签到，并插入 1-3 秒随机等待
 - 本地记录签到成功/失败状态，检测昨天和今天是否存在漏签
 - 通过 WxPusher 发送成功通知或异常报警
@@ -27,7 +27,7 @@
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-playwright install firefox
+playwright install chrome
 ```
 
 ## 配置
@@ -40,34 +40,43 @@ cp config.example.json config.json
 
 然后修改 `config.json` 中的以下字段：
 
-- `browser.profile_path`：Firefox Profile 路径
+- `browser.user_data_dir`：Chrome 用户数据目录
+- `browser.channel`：默认用 `chrome`
+- `browser.executable_path`：可选，自定义 Chrome 可执行文件路径
 - `browser.headless`：`true` 为无头，`false` 为有头
 - `wxpusher.app_token`：WxPusher 应用 Token
 - `wxpusher.uid`：消息接收 UID
 
-### Firefox Profile 路径获取方法
+### Chrome 用户数据目录获取方法
 
-在 Debian 13 上，Firefox Profile 通常位于：
+在 Debian 13 上，Google Chrome 用户数据目录通常位于：
 
 ```text
-/home/<your-user>/.mozilla/firefox/
+/home/<your-user>/.config/google-chrome
 ```
 
 可以用下面的命令查看：
 
 ```bash
-ls ~/.mozilla/firefox
+ls ~/.config/google-chrome
 ```
 
-常见结果类似：
+常见会包含：
 
 ```text
-xxxxxxxx.default-release
-profiles.ini
+Default
+Local State
+First Run
 ```
 
-将 `browser.profile_path` 配置为类似 `/home/<your-user>/.mozilla/firefox/xxxxxxxx.default-release` 的目录。  
-首次使用前，建议先用这个 Profile 手动登录 TTG，确认 Cookie 已保存在该 Profile 中。
+将 `browser.user_data_dir` 配置为类似 `/home/<your-user>/.config/google-chrome` 的目录。  
+首次使用前，建议先用这个 Chrome 用户数据目录手动登录 TTG，确认 Cookie 已保存在该目录中。
+
+如果系统里的 Chrome 不是标准安装路径，可以额外配置 `browser.executable_path`，例如：
+
+```json
+"executable_path": "/usr/bin/google-chrome"
+```
 
 ## 运行
 
