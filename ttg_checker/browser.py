@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 import time
 from dataclasses import dataclass
@@ -9,6 +10,8 @@ from playwright.sync_api import BrowserContext, Page, TimeoutError as Playwright
 from playwright.sync_api import sync_playwright
 
 from ttg_checker.config import BrowserConfig, TtgConfig
+
+LOGGER = logging.getLogger(__name__)
 
 
 class CheckinError(RuntimeError):
@@ -30,6 +33,7 @@ class TtgBrowserClient:
     def run_checkin(self) -> CheckinResult:
         screenshot_dir = Path(self.browser_config.screenshot_dir)
         screenshot_dir.mkdir(parents=True, exist_ok=True)
+        LOGGER.info("Launching Chrome with user_data_dir=%s", self.browser_config.user_data_dir)
 
         with sync_playwright() as playwright:
             launch_kwargs = {
@@ -71,13 +75,16 @@ class TtgBrowserClient:
 
     def _open_target_page(self, context: BrowserContext) -> Page:
         page = context.new_page()
+        LOGGER.info("Opening TTG page: %s", self.ttg_config.checkin_url)
         response = page.goto(self.ttg_config.checkin_url, wait_until="domcontentloaded")
         if response is None:
             raise CheckinError("TTG page returned no response")
         status = response.status
+        LOGGER.info("TTG goto finished with status=%s current_url=%s", status, page.url)
         if status >= 400:
             raise CheckinError(f"TTG page returned HTTP {status}")
         page.wait_for_load_state("networkidle")
+        LOGGER.info("TTG page reached networkidle current_url=%s", page.url)
         return page
 
     def _guard_response_status(self, page: Page) -> None:
@@ -92,9 +99,11 @@ class TtgBrowserClient:
 
     def _locate_checkin_button(self, page: Page):
         for selector in self.ttg_config.button_selectors:
+            LOGGER.info("Trying check-in button selector: %s", selector)
             locator = page.locator(selector).first
             try:
                 locator.wait_for(state="visible", timeout=5_000)
+                LOGGER.info("Matched check-in button selector: %s", selector)
                 return locator
             except PlaywrightTimeoutError:
                 continue

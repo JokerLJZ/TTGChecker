@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 
 from ttg_checker.config import load_config
@@ -17,7 +18,15 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
 def main() -> int:
+    configure_logging()
     parser = build_parser()
     args = parser.parse_args()
     config = load_config(args.config)
