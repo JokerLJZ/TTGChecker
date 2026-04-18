@@ -1,100 +1,113 @@
 # TTGChecker
 
-基于 Python + Playwright + Chrome 用户数据目录的 TTG 自动签到脚本。
+TTG（totheglory.im）每日自动签到。**不使用浏览器自动化**，直接用 `curl_cffi` 模拟真实 Edge/Chrome 的 TLS + HTTP/2 指纹发请求，规避 TTG 的反脚本检测。
 
-## 功能
+## 工作原理
 
-- 使用 Chrome 持久化用户数据目录复用登录态，避免重复登录
-- 脚本自动启动 Chrome，新建标签页访问 TTG，完成后主动关闭 Chrome
-- 使用真实页面元素定位与点击完成签到，并插入 1-3 秒随机等待
-- 本地记录签到成功/失败状态，检测昨天和今天是否存在漏签
-- 通过 WxPusher 发送成功通知或异常报警
-- 支持通过 `headless` 开关切换有头/无头模式
+TTG 主页 inline JS 内嵌了 `signed_timestamp`（10 位时间戳）和 `signed_token`（32 位 md5），点击签到时由 jQuery 发起：
 
-## 目录
+```
+POST https://totheglory.im/signed.php
+body: signed_timestamp=...&signed_token=...
+```
 
-- `main.py`：CLI 入口
-- `ttg_checker/config.py`：配置读取
-- `ttg_checker/browser.py`：浏览器自动化与页面交互
-- `ttg_checker/state.py`：签到状态记录
-- `ttg_checker/notifier.py`：WxPusher 通知
-- `ttg_checker/service.py`：签到流程编排
-- `config.example.json`：配置样例
+脚本流程：
 
-## 安装
+1. `GET /` 拉取主页（带 cookie + 真实 Edge TLS 指纹）
+2. 用正则从主页 HTML 解析 `signed_timestamp` 与 `signed_token`
+3. 随机停顿 1.2-3.4s（拟人节奏）
+4. `POST /signed.php` 提交签到
+5. 解析返回，记录状态，发 WxPusher 通知
+
+之前 `requests` 直接 GET URL 失败的原因：① TLS 指纹被识别为 Python；② 没先访问主页拿一次性 token。本实现两个问题都解决了。
+
+## 安装（Debian 13）
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-playwright install chrome
+sudo useradd -r -m -d /opt/ttg-checker ttg
+sudo -u ttg git clone <this-repo> /opt/ttg-checker
+cd /opt/ttg-checker
+sudo -u ttg python3 -m venv .venv
+sudo -u ttg .venv/bin/pip install -r requirements.txt
 ```
 
 ## 配置
 
-先复制示例配置：
-
 ```bash
 cp config.example.json config.json
+chmod 600 config.json
 ```
 
-然后修改 `config.json` 中的以下字段：
+填写：
 
-- `browser.user_data_dir`：Chrome 用户数据目录
-- `browser.channel`：默认用 `chrome`
-- `browser.executable_path`：可选，自定义 Chrome 可执行文件路径
-- `browser.headless`：`true` 为无头，`false` 为有头
-- `wxpusher.app_token`：WxPusher 应用 Token
-- `wxpusher.uid`：消息接收 UID
+| 字段 | 说明 |
+|---|---|
+| `ttg.cookie` | 浏览器 F12 → Network → 任一 totheglory.im 请求 → Headers → Request Headers → 整段 `Cookie:` 的值 |
+| `ttg.user_agent` | 同一个浏览器的 User-Agent。**必须和 cookie 来自同一浏览器**，否则可能触发安全校验 |
+| `ttg.impersonate` | curl_cffi 的伪装目标。Edge 用 `edge99`，Chrome 用 `chrome120` |
+| `wxpusher.app_token` / `wxpusher.uid` | WxPusher 通知凭据 |
 
-### Chrome 用户数据目录获取方法
+### 获取 Cookie 的方法
 
-在 Debian 13 上，Google Chrome 用户数据目录通常位于：
+1. 用 Edge / Chrome 登录 https://totheglory.im
+2. F12 → Network 面板
+3. 刷新页面
+4. 点列表中第一条请求（域名 `totheglory.im`）
+5. 切到 Headers → Request Headers → 找 `Cookie:` 那一行
+6. 右键复制整行的值（不要带 `Cookie:` 这几个字）粘进 `config.json`
 
-```text
-/home/<your-user>/.config/google-chrome
-```
+Cookie 失效时（一般几个月一次，或更换 IP/UA 后）会触发 WxPusher 报警 "TTG Cookie 失效"，重复以上步骤更新即可。
 
-可以用下面的命令查看：
+## 手动测试
 
 ```bash
-ls ~/.config/google-chrome
+.venv/bin/python main.py --config config.json
 ```
 
-常见会包含：
+成功会打印 "签到成功。站点反馈: ..."，并在 `data/checkin_log.json` 写入记录。
 
-```text
-Default
-Local State
-First Run
+## 部署 systemd 定时任务
+
+```bash
+sudo cp deploy/ttg-checker.service /etc/systemd/system/
+sudo cp deploy/ttg-checker.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ttg-checker.timer
 ```
 
-将 `browser.user_data_dir` 配置为类似 `/home/<your-user>/.config/google-chrome` 的目录。  
-首次使用前，建议先用这个 Chrome 用户数据目录手动登录 TTG，确认 Cookie 已保存在该目录中。
+查看下次触发时间：
 
-如果系统里的 Chrome 不是标准安装路径，可以额外配置 `browser.executable_path`，例如：
+```bash
+systemctl list-timers ttg-checker.timer
+```
+
+查看日志：
+
+```bash
+journalctl -u ttg-checker.service -n 100
+```
+
+## 状态文件
+
+`data/checkin_log.json` 结构：
 
 ```json
-"executable_path": "/usr/bin/google-chrome"
+{
+  "history": {
+    "2026-04-18": {"run_at": "...", "success": true, "message": "...", "missed_dates": []}
+  },
+  "last_success_date": "2026-04-18",
+  "last_run_at": "..."
+}
 ```
 
-## 运行
+漏签检测：每次执行会检查最近 7 天内 `success != true` 的日期，写入通知正文（TTG 不支持补签，仅作为提示）。
 
-```bash
-python3 main.py --config config.json
-```
+## 反爬要点
 
-## 定时执行
-
-可以使用 `cron` 每天定时执行，例如每天 08:30：
-
-```cron
-30 8 * * * cd /path/to/TTGChecker && /path/to/TTGChecker/.venv/bin/python main.py --config config.json
-```
-
-## 漏签说明
-
-脚本会检查昨天和今天在本地状态文件中的执行结果。  
-如果发现漏签，会立即触发重试，并在通知中标记漏签日期。
-
-这里的“补签”是工程上的补救重试，不代表 TTG 支持对历史日期真正回补签到；若站点本身不提供历史补签入口，脚本只能对当前运行时刻再次尝试签到。
+- TLS/HTTP2 指纹由 `curl_cffi` 伪装为 Edge/Chrome（基于 curl-impersonate）
+- 必先 GET 主页拿到当前刷新周期的 token，不直接打接口
+- POST 时带齐 `Origin` / `Referer` / `X-Requested-With: XMLHttpRequest` / `Sec-Fetch-*`
+- 主页和签到之间随机停顿 1.2-3.4s
+- systemd timer 用 `RandomizedDelaySec=30min` + 脚本内 `--jitter-seconds 1800` 双重打散，避免每天同一秒触发
+- **不要**在多台机器上用同一个 cookie，TTG 会检测异地登录

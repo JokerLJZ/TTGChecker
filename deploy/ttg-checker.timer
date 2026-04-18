@@ -1,0 +1,12 @@
+[Unit]
+Description=Run TTG check-in daily
+Requires=ttg-checker.service
+
+[Timer]
+# Fire once a day around 09:00 local time, with 30min random delay smeared inside the script.
+OnCalendar=*-*-* 09:00:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

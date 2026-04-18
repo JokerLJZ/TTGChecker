@@ -3,3 +3,6 @@ __pycache__/
 artifacts/
 data/
 config.json
+.venv/
+.DS_Store
+.claude/

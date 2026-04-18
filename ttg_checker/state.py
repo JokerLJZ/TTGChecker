@@ -7,12 +7,11 @@ from pathlib import Path
 from typing import Any
 
 
-@dataclass(slots=True)
+@dataclass
 class CheckinRecord:
     run_at: str
     success: bool
     message: str
-    screenshot: str | None = None
     missed_dates: list[str] = field(default_factory=list)
 
 
@@ -24,28 +23,33 @@ class StateStore:
     def load(self) -> dict[str, Any]:
         if not self.path.exists():
             return {"history": {}, "last_success_date": None, "last_run_at": None}
-        with self.path.open("r", encoding="utf-8") as file:
-            return json.load(file)
+        with self.path.open("r", encoding="utf-8") as fp:
+            return json.load(fp)
 
     def save(self, payload: dict[str, Any]) -> None:
-        with self.path.open("w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2)
-
-    def get_missed_dates(self, today: date | None = None) -> list[str]:
-        current_day = today or date.today()
-        payload = self.load()
-        history = payload.get("history", {})
-        targets = [current_day - timedelta(days=1), current_day]
-        return [
-            item.isoformat()
-            for item in targets
-            if not history.get(item.isoformat(), {}).get("success", False)
-        ]
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as fp:
+            json.dump(payload, fp, ensure_ascii=False, indent=2)
+        tmp.replace(self.path)
 
     def already_checked_in_today(self, today: date | None = None) -> bool:
-        current_day = today or date.today()
-        payload = self.load()
-        return payload.get("history", {}).get(current_day.isoformat(), {}).get("success", False)
+        current = today or date.today()
+        return (
+            self.load()
+            .get("history", {})
+            .get(current.isoformat(), {})
+            .get("success", False)
+        )
+
+    def get_missed_dates(self, today: date | None = None, lookback_days: int = 7) -> list[str]:
+        current = today or date.today()
+        history = self.load().get("history", {})
+        missed: list[str] = []
+        for delta in range(lookback_days, 0, -1):
+            d = (current - timedelta(days=delta)).isoformat()
+            if not history.get(d, {}).get("success", False):
+                missed.append(d)
+        return missed
 
     def record(self, for_date: date, record: CheckinRecord) -> None:
         payload = self.load()
@@ -54,7 +58,6 @@ class StateStore:
             "run_at": record.run_at,
             "success": record.success,
             "message": record.message,
-            "screenshot": record.screenshot,
             "missed_dates": record.missed_dates,
         }
         payload["last_run_at"] = record.run_at

@@ -1,0 +1,16 @@
+[Unit]
+Description=TTG daily check-in
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ttg-checker
+ExecStart=/opt/ttg-checker/.venv/bin/python /opt/ttg-checker/main.py --config /opt/ttg-checker/config.json --jitter-seconds 1800
+User=ttg
+Group=ttg
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
